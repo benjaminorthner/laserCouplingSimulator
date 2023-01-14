@@ -2,7 +2,7 @@ import './style.css'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import * as dat from 'lil-gui'
-import { StaticDrawUsage, Vector3 } from 'three'
+import { MeshStandardMaterial, StaticDrawUsage, TangentSpaceNormalMap, Vector3 } from 'three'
 
 // THE ANGLE OF THE CONE AT WHICH THE FIBER WILL ALLOW LIGHT TO PASS THOUGH IS CALLED THE ACCEPTANCE CONE https://www.fiberoptics4sale.com/blogs/archive-posts/95146054-optical-fiber-tutorial-optic-fiber-communication-fiber
 // optical fiber power loss mechanisms:
@@ -133,36 +133,33 @@ class LaserBeam {
         this.originDirection = originDirection
         this.maxBounces = maxBounces
 
-        this.laserMaterial = new THREE.MeshStandardMaterial({color: 0x00ff00, emissive: 0x00ff00, transparent: true, opacity: 0.7})
+        this.laserMaterial = new THREE.MeshStandardMaterial({color: 0xff0000, emissive: 0xff0000, transparent: true, opacity: 0.7})
+        this.beamThickness = 0.007
         this.beamList = []
     }
 
     update() {
         this.clearLasers()
 
+        const currentPosition = this.origin.clone()
+        const currentDirection = this.originDirection.clone()
+
         // loop over all bounces
-        this.currentPosition = new Vector3(0,0,0)
-        this.currentDirection = new Vector3(0,0,0)
-
-        this.currentPosition = this.origin.clone()
-        this.currentDirection = this.originDirection.clone()
-
         for (let i = 0; i < this.maxBounces; i++) {
             // cast the current beam
-            const castReturn = this.cast(this.currentPosition, this.currentDirection)
-            this.keepBouncing = castReturn[0]
-            this.newPosition = castReturn[1]
-            this.newDirection = castReturn[2]
+            const castReturn = this.cast(currentPosition, currentDirection)
+            const keepBouncing = castReturn[0]
+            const newPosition = castReturn[1]
+            const newDirection = castReturn[2]
 
             // draw the current beam
-            console.log(i, this.currentPosition, this.newPosition)
-            this.drawLaser(this.currentPosition, this.newPosition)
+            this.drawLaser(currentPosition, newPosition)
             
             // if keepBouncing is false then break
-            if (!this.keepBouncing) {break}
+            if (!keepBouncing) {break}
 
-            this.currentPosition.copy(this.newPosition)
-            this.currentDirection.copy(this.newDirection)
+            currentPosition.copy(newPosition)
+            currentDirection.copy(newDirection)
         }
     }
 
@@ -182,34 +179,37 @@ class LaserBeam {
         });
 
         // check which meshes are intersected by the ray
-        const intersects = raycaster.intersectObjects(mirrorMeshes)
+        const mirrorIntersects = raycaster.intersectObjects(mirrorMeshes)
+        const fiberIntersect = raycaster.intersectObject(Fiber.instance)
 
-        // check if intersects is empty if so no more bounces
-        if (intersects.length == 0) {
-            console.log("to infinity")
+        // check if fiber has been reached
+        if (fiberIntersect.length != 0) {
+            return [false, fiberIntersect[0].point, direction]
+        }
+
+        // if no mirror is hit
+        if (mirrorIntersects.length == 0) {
             const newPosition = position.clone()
             newPosition.addScaledVector(direction, 100)
             return [false, newPosition, direction]
         }
-        else{
-            const intersect = intersects[0]
-            
 
-            const intersectNormal = mirrorNormals[mirrorMeshes.findIndex((mesh) => {return mesh.uuid == intersect.object.uuid})]
-            const intersectPoint = intersect.point
-            
-            const newDirection = direction.clone()
-            console.log("intersectNormal", intersectNormal)
-            newDirection.reflect(intersectNormal)
+        // if a mirror is hit
+        const intersect = mirrorIntersects[0]
 
-            return [true, intersectPoint, newDirection]
-        }
+        const intersectNormal = mirrorNormals[mirrorMeshes.findIndex((mesh) => {return mesh.uuid == intersect.object.uuid})]
+        const intersectPoint = intersect.point
+        
+        const newDirection = direction.clone()
+        newDirection.reflect(intersectNormal)
+
+        return [true, intersectPoint, newDirection]
     
     }
 
     drawLaser(p1, p2) {
         const beam = new THREE.Mesh(
-            new THREE.TubeGeometry(new THREE.LineCurve3(p1, p2), 20, 0.01, 8),
+            new THREE.TubeGeometry(new THREE.LineCurve3(p1, p2), 20, this.beamThickness, 8),
             this.laserMaterial
         )
 
@@ -224,6 +224,75 @@ class LaserBeam {
     }
 }
 
+class Fiber {
+    constructor(position, normal, acceptanceAngle) {
+        this.position = position
+        this.normal = normal
+        this.acceptanceAngle = acceptanceAngle
+
+        const cableMaterial = new MeshStandardMaterial({color: 0x9999cc})
+        const cableThickness = 0.01
+
+        const circleMaterial = new MeshStandardMaterial({color: 0x666666})
+        const coneMaterial = new MeshStandardMaterial({color: 0x0000ff, transparent: true, opacity: 0.3})
+        coneMaterial.side = THREE.DoubleSide
+
+        const fiber = new THREE.Group()
+        scene.add(fiber)
+
+        // ENTRANCE CIRCLE
+        const circleRadius = 0.02
+        const circleThickness = 0.01
+        const circle = new THREE.Mesh(
+            new THREE.CylinderGeometry(circleRadius, circleRadius, circleThickness, 50),
+            circleMaterial
+        )
+        fiber.add(circle)
+        
+        // add circle as class attribute to access in laserBeam
+        Fiber.instance = circle
+
+        // ACCEPTANCE CONE
+
+        // calculate radius and height of cone from acceptanceangle
+        const coneHeight = 1
+        const coneRadius = coneHeight * Math.atan(acceptanceAngle)
+        const acceptanceCone = new THREE.Mesh(
+            new THREE.ConeGeometry(coneRadius, coneHeight, 20, 1, true),
+            coneMaterial
+        )
+        // position the acceptance cone
+        acceptanceCone.position.y += coneHeight / 2 + circleThickness / 2
+        acceptanceCone.rotateZ(Math.PI)
+        fiber.add(acceptanceCone)
+
+        // positioning
+        fiber.position.x = position.x
+        fiber.position.y = position.y
+        fiber.position.z = position.z
+        
+        fiber.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), this.normal.clone().normalize())
+
+        // FIBER CABLE
+        const p1 = fiber.position
+        const p2 = p1.clone().addScaledVector(normal, -0.2)
+        const p3 = p2.clone().multiply(new THREE.Vector3(1, 0.2, 1))
+        const p4 = p3.clone().addScaledVector(new THREE.Vector3(0,0,-1), 0.1)
+
+        const cableCurve = new THREE.CatmullRomCurve3( [
+                p1,
+                p2,
+                p3,
+                p4
+            ] );
+        
+        const cable = new THREE.Mesh(
+            new THREE.TubeGeometry(cableCurve, 100, cableThickness),
+            cableMaterial
+        )
+        scene.add(cable)
+        }
+    }
 
 const axesHelper = new THREE.AxesHelper( 5 );
 scene.add( axesHelper );
@@ -232,7 +301,7 @@ const mirror1 = new Mirror(new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 1
 const mirror2 = new Mirror(new THREE.Vector3(0, 1, 1), new THREE.Vector3(1, 0, -1))
 
 const laserBeam = new LaserBeam(sourcePos, new Vector3(-1, 0, 0), 3)
-
+const fiber = new Fiber(new THREE.Vector3(2, 1, 1), new THREE.Vector3(-1, 0, 0), 0.02)
 
 // Floor
 const floor = new THREE.Mesh(
