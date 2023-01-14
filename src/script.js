@@ -180,10 +180,11 @@ class LaserBeam {
 
         // check which meshes are intersected by the ray
         const mirrorIntersects = raycaster.intersectObjects(mirrorMeshes)
-        const fiberIntersect = raycaster.intersectObject(Fiber.instance)
+        const fiberIntersect = raycaster.intersectObject(Fiber.instance.circle)
 
         // check if fiber has been reached
         if (fiberIntersect.length != 0) {
+            this.computeCouplingPower(direction)
             return [false, fiberIntersect[0].point, direction]
         }
 
@@ -191,6 +192,7 @@ class LaserBeam {
         if (mirrorIntersects.length == 0) {
             const newPosition = position.clone()
             newPosition.addScaledVector(direction, 100)
+            this.couplingPower = 0.
             return [false, newPosition, direction]
         }
 
@@ -222,6 +224,10 @@ class LaserBeam {
             scene.remove(beam)
         });
     }
+
+    computeCouplingPower(laserDirection){
+        this.couplingPower = -1 * laserDirection.dot(Fiber.instance.normal)
+    }
 }
 
 class Fiber {
@@ -229,6 +235,9 @@ class Fiber {
         this.position = position
         this.normal = normal
         this.acceptanceAngle = acceptanceAngle
+
+        // add instance as class attribute to access in laserBeam
+        Fiber.instance = this
 
         const cableMaterial = new MeshStandardMaterial({color: 0x9999cc})
         const cableThickness = 0.01
@@ -243,14 +252,12 @@ class Fiber {
         // ENTRANCE CIRCLE
         const circleRadius = 0.02
         const circleThickness = 0.01
-        const circle = new THREE.Mesh(
+        this.circle = new THREE.Mesh(
             new THREE.CylinderGeometry(circleRadius, circleRadius, circleThickness, 50),
             circleMaterial
         )
-        fiber.add(circle)
+        fiber.add(this.circle)
         
-        // add circle as class attribute to access in laserBeam
-        Fiber.instance = circle
 
         // ACCEPTANCE CONE
 
