@@ -34,7 +34,7 @@ const sourcePos = new THREE.Vector3(1,1,0)
 const laserPointer = new THREE.Group()
 scene.add(laserPointer)
 
-const laserPointerMaterial = new THREE.MeshStandardMaterial()
+const laserPointerMaterial = new THREE.MeshStandardMaterial({color: 0x706666})
 const laserPointerLength = 1
 const laserPointerRadius = 0.05
 
@@ -128,12 +128,12 @@ class Mirror {
 
 
 class LaserBeam {
-    constructor(origin, originDirection, maxBounces) {
+    constructor(origin, originDirection, color) {
         this.origin = origin
         this.originDirection = originDirection
-        this.maxBounces = maxBounces
+        this.maxBounces = 5
 
-        this.laserMaterial = new THREE.MeshStandardMaterial({color: 0xff0000, emissive: 0xff0000, transparent: true, opacity: 0.7})
+        this.laserMaterial = new THREE.MeshStandardMaterial({color: color, emissive: 0xff0000, transparent: true, opacity: 0.7})
         this.beamThickness = 0.007
         this.beamList = []
     }
@@ -250,10 +250,10 @@ class Fiber {
         scene.add(fiber)
 
         // ENTRANCE CIRCLE
-        const circleRadius = 0.02
-        const circleThickness = 0.01
+        const circleRadius = 0.03
+        const circleThickness = circleRadius * 1.5
         this.circle = new THREE.Mesh(
-            new THREE.CylinderGeometry(circleRadius, circleRadius, circleThickness, 50),
+            new THREE.CylinderGeometry(circleRadius, cableThickness, circleThickness, 50),
             circleMaterial
         )
         fiber.add(this.circle)
@@ -307,8 +307,13 @@ scene.add( axesHelper );
 const mirror1 = new Mirror(new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 1))
 const mirror2 = new Mirror(new THREE.Vector3(0, 1, 1), new THREE.Vector3(1, 0, -1))
 
-const laserBeam = new LaserBeam(sourcePos, new Vector3(-1, 0, 0), 3)
-const fiber = new Fiber(new THREE.Vector3(2, 1, 1), new THREE.Vector3(-1, 0, 0), 0.02)
+const laserBeam = new LaserBeam(sourcePos, new Vector3(-1, 0, 0), 0xff0000)
+
+const fiberPos = new THREE.Vector3(2, 1, 1)
+const fiberNormal = new THREE.Vector3(-1, 0, 0)
+const fiber = new Fiber(fiberPos, fiberNormal, 0.02)
+
+const backLaserBeam = new LaserBeam(fiberPos, fiberNormal, 0x00ff00)
 
 // Floor
 const floor = new THREE.Mesh(
@@ -338,14 +343,14 @@ scene.add(moonLight)
 
 // GUI MIRRORS
 const mirror1Angles = new THREE.Vector3(1, 0, 1)
-gui.add(mirror1Angles, 'x').min(- Math.PI).max(Math.PI).step(0.001)
-gui.add(mirror1Angles, 'y').min(- Math.PI).max(Math.PI).step(0.001)
-gui.add(mirror1Angles, 'z').min(- Math.PI).max(Math.PI).step(0.001)
+gui.add(mirror1Angles, 'x').min(0.9).max(1.1).step(0.001)
+gui.add(mirror1Angles, 'y').min(-0.1).max(0.1).step(0.001)
+gui.add(mirror1Angles, 'z').min(0.9).max(1.1).step(0.001)
 
 const mirror2Angles = new THREE.Vector3(1, 0, -1)
-gui.add(mirror2Angles, 'x').min(- Math.PI).max(Math.PI).step(0.001)
-gui.add(mirror2Angles, 'y').min(- Math.PI).max(Math.PI).step(0.001)
-gui.add(mirror2Angles, 'z').min(- Math.PI).max(Math.PI).step(0.001)
+gui.add(mirror2Angles, 'x').min(0.9).max(1.1).step(0.001)
+gui.add(mirror2Angles, 'y').min(-0.1).max(0.1).step(0.001)
+gui.add(mirror2Angles, 'z').min(-1.1).max(-0.9).step(0.001)
 
 /**
  * Sizes
@@ -411,6 +416,8 @@ const tick = () =>
 
     // Raycasting
     laserBeam.update()
+    backLaserBeam.update()
+
     mirror1.setNormal(mirror1Angles)
     mirror2.setNormal(mirror2Angles)
 
