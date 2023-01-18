@@ -80,8 +80,6 @@ laserPointer.rotateZ(Math.PI / 2)
 
 class Mirror {
     constructor(position, normal) {
-        
-
         this.position = position
         this.normal = normal.normalize()
 
@@ -123,6 +121,11 @@ class Mirror {
     setNormal(newNormal) {
         this.normal = newNormal.clone().normalize()
         this.mirror.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), this.normal.clone().normalize())
+
+        // update lasers
+        LaserBeam.allInstances.forEach(laserBeam => {
+           laserBeam.update() 
+        });
     }
 }
 
@@ -136,6 +139,10 @@ class LaserBeam {
         this.laserMaterial = new THREE.MeshStandardMaterial({color: color, emissive: 0xff0000, transparent: true, opacity: 0.7})
         this.beamThickness = 0.007
         this.beamList = []
+
+        // create list of al LaserBeam instances
+        if(!LaserBeam.allInstances) { LaserBeam.allInstances = [] }
+        LaserBeam.allInstances.push(this)
     }
 
     update() {
@@ -214,7 +221,6 @@ class LaserBeam {
             new THREE.TubeGeometry(new THREE.LineCurve3(p1, p2), 20, this.beamThickness, 8),
             this.laserMaterial
         )
-
         this.beamList.push(beam)
         scene.add(beam)
     }
@@ -223,6 +229,7 @@ class LaserBeam {
         this.beamList.forEach(beam => {
             scene.remove(beam)
         });
+        this.beamList = []
     }
 
     computeCouplingPower(laserDirection){
@@ -414,10 +421,7 @@ const tick = () =>
     // Render
     renderer.render(scene, camera)
 
-    // Raycasting
-    laserBeam.update()
-    backLaserBeam.update()
-
+    // update mirror controls
     mirror1.setNormal(mirror1Angles)
     mirror2.setNormal(mirror2Angles)
 
