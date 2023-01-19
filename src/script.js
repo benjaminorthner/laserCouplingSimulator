@@ -2,7 +2,10 @@ import './style.css'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import * as dat from 'lil-gui'
-import { MeshStandardMaterial, StaticDrawUsage, TangentSpaceNormalMap, Vector3 } from 'three'
+import { MeshStandardMaterial, Vector3 } from 'three'
+import { CSG } from 'three-csg-ts'
+import { STLLoader } from 'three/examples/jsm/loaders/STLLoader'
+
 
 // THE ANGLE OF THE CONE AT WHICH THE FIBER WILL ALLOW LIGHT TO PASS THOUGH IS CALLED THE ACCEPTANCE CONE https://www.fiberoptics4sale.com/blogs/archive-posts/95146054-optical-fiber-tutorial-optic-fiber-communication-fiber
 // optical fiber power loss mechanisms:
@@ -25,6 +28,28 @@ const scene = new THREE.Scene()
  */
 const textureLoader = new THREE.TextureLoader()
 
+/**
+ * Load 3d models
+ */
+const loader = new STLLoader()
+loader.load(
+    'models/buildPlate.stl',
+    function (geometry) {
+        const floor = new THREE.Mesh(
+            geometry.scale(50, 50, 50),
+            new THREE.MeshStandardMaterial({color: 0xccdccc})
+            )
+
+        floor.rotation.x = Math.PI / 2
+        scene.add(floor)
+    },
+    (xhr) => {
+        console.log((xhr.loaded / xhr.total) * 100 + '% buildPlateMesh Loaded')
+    },
+    (error) => {
+        console.log(error)
+    }
+)
 
 const sourcePos = new THREE.Vector3(1,1,0)
 
@@ -323,13 +348,40 @@ const fiber = new Fiber(fiberPos, fiberNormal, 0.02)
 const backLaserBeam = new LaserBeam(fiberPos, fiberNormal, 0x00ff00)
 
 // Floor
-const floor = new THREE.Mesh(
-    new THREE.BoxGeometry(20, 20, 1),
-    new THREE.MeshStandardMaterial({ color: '#a9c388' })
+const floorWidth = 10
+const floorHeight = 0.2
+let floor = new THREE.Mesh(
+    new THREE.BoxGeometry(floorWidth, floorWidth, floorHeight),
+    new THREE.MeshStandardMaterial({ color: 0xa9c388 })
 )
 floor.rotation.x = - Math.PI * 0.5
 floor.position.y = - 1 / 2
-scene.add(floor)
+
+const screwHole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.1, 0.1, 2, 5),
+    new THREE.MeshStandardMaterial()
+)
+
+
+let holeCount = 2
+let holeX, holeZ = 0
+holeCount += 1
+for (let i = 1; i < holeCount; i++) {
+    holeX = (i - holeCount/2) * floorWidth / holeCount  
+    for (let j = 1; j < holeCount; j++) {
+        holeZ = (j - holeCount/2) * floorWidth / holeCount
+
+        screwHole.position.x = holeX
+        screwHole.position.z = holeZ
+
+        floor.updateMatrix()
+        screwHole.updateMatrix()
+
+        floor = CSG.subtract(floor, screwHole)
+    }
+}
+
+
 
 /**
  * Lights
