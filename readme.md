@@ -1,4 +1,6 @@
 # Laser Coupling Simulator
+## Try Current Version online
+[Latest Version](https://benjaminorthner.github.io/laserCouplingSimulator/)
 
 ## Setup
 Download [Node.js](https://nodejs.org/en/download/).
